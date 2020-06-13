@@ -3,6 +3,7 @@ package shellquote
 import (
 	"bytes"
 	"errors"
+	"os"
 	"strings"
 	"unicode/utf8"
 )
@@ -83,6 +84,14 @@ raw:
 				goto double
 			} else if c == escapeChar {
 				buf.WriteString(input[0 : len(input)-len(cur)-l])
+				if os.PathSeparator == escapeChar {
+					next := rune(cur[0])
+					switch next {
+					case singleChar, doubleChar, escapeChar, 'n':
+					default:
+						buf.WriteString(string(escapeChar))
+					}
+				}
 				input = cur
 				goto escape
 			} else if strings.ContainsRune(splitChars, c) {
