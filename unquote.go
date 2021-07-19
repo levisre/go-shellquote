@@ -84,16 +84,8 @@ raw:
 				goto double
 			} else if c == escapeChar {
 				buf.WriteString(input[0 : len(input)-len(cur)-l])
-				if os.PathSeparator == escapeChar {
-					next := rune(cur[0])
-					switch next {
-					case singleChar, doubleChar, escapeChar, 'n':
-					default:
-						buf.WriteString(string(escapeChar))
-					}
-				}
 				input = cur
-				goto escape
+				goto escape // escape routine handle them all
 			} else if strings.ContainsRune(splitChars, c) {
 				buf.WriteString(input[0 : len(input)-len(cur)-l])
 				return buf.String(), cur, nil
@@ -112,11 +104,32 @@ escape:
 			return "", "", UnterminatedEscapeError
 		}
 		c, l := utf8.DecodeRuneInString(input)
-		if c == '\n' {
-			// a backslash-escaped newline is elided from the output entirely
+		cur := input
+		cur = cur[l:]
+		if strings.ContainsRune(doubleEscapeChars, c) {
+			buf.WriteString(input[0 : len(input)-len(cur)-l])
+			// Windows accepts backslash in file path
+			if os.PathSeparator == escapeChar {
+				if len(cur) > 0 {
+					next := rune(cur[0])
+					switch next {
+					case singleChar, doubleChar, escapeChar, 'n':
+					default:
+						buf.WriteString(string(escapeChar))
+					}
+				} else {
+					buf.WriteString(input[:l])
+				}
+			}
 		} else {
+			buf.WriteString(string(escapeChar))
 			buf.WriteString(input[:l])
 		}
+		// if c == '\n' {
+		// 	// a backslash-escaped newline is elided from the output entirely
+		// } else {
+		// 	buf.WriteString(input[:l])
+		// }
 		input = input[l:]
 	}
 	goto raw
@@ -134,30 +147,44 @@ single:
 
 double:
 	{
-		cur := input
-		for len(cur) > 0 {
-			c, l := utf8.DecodeRuneInString(cur)
-			cur = cur[l:]
-			if c == doubleChar {
-				buf.WriteString(input[0 : len(input)-len(cur)-l])
-				input = cur
-				goto raw
-			} else if c == escapeChar {
-				// bash only supports certain escapes in double-quoted strings
-				c2, l2 := utf8.DecodeRuneInString(cur)
-				cur = cur[l2:]
-				if strings.ContainsRune(doubleEscapeChars, c2) {
-					buf.WriteString(input[0 : len(input)-len(cur)-l-l2])
-					if c2 == '\n' {
-						// newline is special, skip the backslash entirely
-					} else {
-						buf.WriteRune(c2)
-					}
+		if len(input) == 0 {
+			cur := input
+			for len(cur) > 0 {
+				c, l := utf8.DecodeRuneInString(cur)
+				cur = cur[l:]
+				if c == doubleChar {
+					buf.WriteString(input[0 : len(input)-len(cur)-l])
 					input = cur
+					goto raw
+				} else if c == escapeChar {
+					buf.WriteString(input[0 : len(input)-len(cur)-l])
+					input = cur
+					goto escape
 				}
 			}
 		}
 		return "", "", UnterminatedDoubleQuoteError
+		// 	// bash only supports certain escapes in double-quoted strings
+		// c2, l2 := utf8.DecodeRuneInString(cur)
+		// cur = cur[l2:]
+		// if strings.ContainsRune(doubleEscapeChars, c2) {
+		// 	buf.WriteString(input[0 : len(input)-len(cur)-l-l2])
+		// 	if os.PathSeparator == escapeChar {
+		// 		if len(cur) > 0 {
+		// 			next := rune(cur[0])
+		// 			switch next {
+		// 			case singleChar, doubleChar, escapeChar, 'n':
+		// 			default:
+		// 				buf.WriteString(string(escapeChar))
+		// 			}
+		// 		} else {
+		// 			buf.WriteString(string(escapeChar))
+		// 		}
+		// 	}
+		// 	input = cur
+		// 	goto raw
+		// }
+		// }
 	}
 
 done:
