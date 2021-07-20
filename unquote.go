@@ -20,6 +20,7 @@ var (
 	doubleChar        = '"'
 	escapeChar        = '\\'
 	doubleEscapeChars = "$`\"\n\\"
+	newlineChar       = '\n'
 )
 
 // Split splits a string according to /bin/sh's word-splitting rules. It
@@ -106,16 +107,23 @@ escape:
 		c, l := utf8.DecodeRuneInString(input)
 		cur := input
 		cur = cur[l:]
+		// If any of char exists in escape list
 		if strings.ContainsRune(doubleEscapeChars, c) {
+			// Remove the char
 			buf.WriteString(input[0 : len(input)-len(cur)-l])
 			// Windows accepts backslash in file path
 			if os.PathSeparator == escapeChar {
 				if len(cur) > 0 {
+					// Get Next char right after the backslash
 					next := rune(cur[0])
 					switch next {
-					case singleChar, doubleChar, escapeChar, 'n':
+					case singleChar, doubleChar, newlineChar:
+					case ' ':
+						buf.WriteString(string(' '))
+					case escapeChar:
+						buf.WriteString((string(escapeChar)))
 					default:
-						buf.WriteString(string(escapeChar))
+						//buf.WriteString(string(next))
 					}
 				} else {
 					buf.WriteString(input[:l])
